@@ -1,0 +1,172 @@
+<?php
+
+namespace App\Console\Commands\Purchasing;
+
+use App\Models\Inventory\ProductRecipeUnit;
+use App\Models\ProductIngredient;
+use App\Models\Purchasing\ForecastConversionApproval;
+use App\Models\Purchasing\ForecastConversionApprovalDetail;
+use App\Models\Purchasing\ForecastConversionApprovalDetailBranch;
+use App\Models\Purchasing\ForecastConversionSettingPo;
+use App\Models\Purchasing\PoSupplier;
+use App\Models\Purchasing\StockOpname;
+use App\Models\Purchasing\StockOpnameIngredient;
+use App\Models\Purchasing\StockOpnameIngredientDetail;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
+
+class Po2 extends Command
+{
+    /**
+     * The name and signature of the console command.
+     *
+     * @var string
+     */
+    protected $signature = 'purchasing:po-2-old {--stock_opname_id=} {--submitted_by=}';
+
+    /**
+     * The console command description.
+     *
+     * @var string
+     */
+    protected $description = 'purchasing po 2 ini digunakan untuk membuat po dari so';
+
+    /**
+     * Create a new command instance.
+     *
+     * @return void
+     */
+    public function __construct()
+    {
+        parent::__construct();
+    }
+
+    /**
+     * Execute the console command.
+     *
+     * @return int
+     */
+    public function handle()
+    {
+        try {
+            $stock_opname_id = $this->option('stock_opname_id');
+            $submittedBy = $this->option('submitted_by');
+            // $datas = StockOpnameIngredient::where('stock_opname_id', $stock_opname_id)->get();
+            $ingredients = StockOpnameIngredient::where('stock_opname_id', $stock_opname_id)->pluck('product_ingredient_id');
+            $datas = ProductIngredient::whereIn('id', $ingredients)->get();
+
+            $stockOpname = StockOpname::select('month')->find($stock_opname_id);
+
+            $this->info('Calculate Data..');
+            $bar = $this->output->createProgressBar(count($datas));
+            $bar->start();
+
+            $month = $stockOpname->month;
+            $nextMonth = $month + 1;
+            if ($nextMonth == 13) {
+                $nextMonth = 1;
+            }
+            $year = date('Y');
+            $nextYear = $year;
+            if ($month == 0) {
+                $month = 12;
+                $year = $year - 1;
+                $nextYear = date('Y');
+            }
+
+            //untuk proses data. po 1 next month
+            $approval = ForecastConversionApproval::select('id')
+                ->whereIn('status', ['approved', 'setting-po'])
+                ->where('type', 'default')
+                ->where('month', $nextMonth)
+                ->where('year', $nextYear)
+                ->first(); //harus ada adjust jika po supplier lebih dari 1
+            $forecast_conversion_approval_id = $approval?->id;
+
+            $settingPos = ForecastConversionSettingPo::where('forecast_conversion_approval_id', $forecast_conversion_approval_id)->get();
+
+            //po 2
+            $forecastConversionApproval = ForecastConversionApproval::create([
+                'parent_id' => $forecast_conversion_approval_id,
+                'stock_opname_id' => $stock_opname_id,
+                'month' => $nextMonth,
+                'year' => $nextYear,
+                'type' => 'so',
+                'status' => 'approved',
+                'submitted_by' => $submittedBy,
+                'approved_by' => $submittedBy,
+                'submitted_at' => date('Y-m-d H:i:s'),
+                'approved_at' => date('Y-m-d H:i:s'),
+            ]);
+
+            $remove = true;
+            foreach ($datas as $value) {
+                $productIngredient = ProductIngredient::select('product_recipe_unit_id')->find($value->id);
+                $unit = ProductRecipeUnit::find($productIngredient->product_recipe_unit_id);
+                if ($unit) {
+                    if ($unit->parent_id_4) {
+                        $latestUnit = $unit->parent_id_4;
+                    } elseif ($unit->parent_id_3) {
+                        $latestUnit = $unit->parent_id_3;
+                    } elseif ($unit->parent_id_2) {
+                        $latestUnit = $unit->parent_id_2;
+                    } else {
+                        $latestUnit = $unit->id;
+                    }
+
+                    $stock_real = StockOpnameIngredientDetail::where('product_ingredient_id', $value->id)
+                        ->where('product_recipe_unit_id', $latestUnit)
+                        ->where('stock_opname_id', $stock_opname_id)
+                        ->sum('stock_real');
+
+                    $cekSettingPo = $settingPos->where('product_ingredient_id', $value->id)->first();
+
+                    $cek = ForecastConversionApprovalDetail::select('buffer', 'conversion_latest_rounding', 'conversion_latest_rounding_total')
+                        ->where('forecast_conversion_approval_id', $forecast_conversion_approval_id)
+                        ->where('product_ingredient_id', $value->id)
+                        ->first();
+
+                    if ($cek) {
+                        $po1 = $cek->conversion_latest_rounding;
+                        $po1Setengah = round($po1 / 2);
+                        if ($po1 > 0) {
+                            $n = $cek->conversion_latest_rounding_total - $stock_real;
+                            $qty = $n - $po1Setengah;
+
+                            if ($qty > 0) {
+                                ForecastConversionSettingPo::create([
+                                    'parent_id' => $cekSettingPo->id,
+                                    'forecast_conversion_approval_id' => $forecastConversionApproval->id,
+                                    'product_ingredient_id' => $value->id,
+                                    'brand_id' => $cekSettingPo->brand_id,
+                                    'barcode' => $cekSettingPo->barcode,
+                                    'qty_total' => $qty, //stok so setelah perhitungan
+                                    'qty_real' => $po1, //kalo di so, ini qty sebelumnya. ambil dari tiap branch yang 50%
+                                    'qty_remaining' => 0, //dibuat 0 karena so
+                                    'product_recipe_unit_id' => $cekSettingPo->product_recipe_unit_id,
+                                    'created_by' => $submittedBy,
+                                ]);
+
+                                $remove = false;
+                            }
+                        }
+                    }
+                }
+
+                $bar->advance();
+            }
+
+            if ($remove) {
+                ForecastConversionApproval::where('id', $forecastConversionApproval->id)->delete();
+            }
+
+            $bar->finish();
+            $this->output->newLine();
+
+            $this->info('Successfully');
+        } catch (\Throwable $th) {
+            Log::error($this->description . ': ' . $th->getMessage());
+            $this->error('Error: ' . $th->getMessage());
+        }
+    }
+}

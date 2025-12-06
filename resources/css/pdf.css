@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* @import url('https://fonts.googleapis.com/css?family=Roboto:400,500,700'); */
+
+html {
+    font-family: 'Roboto:400,500,700', sans-serif;
+}
+
+body {
+    print-color-adjust: exact;
+}
+
+table.table-line-top td {
+    @apply align-top;
+}
+
+table.table-py-1 td {
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+}
+
+table.table-py-2 td {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+}
+
+/* @layer base {
+    ul, ol {
+      list-style: revert;
+    }
+
+    li {
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+    }
+  } */
+
+.prose ol li::marker {
+    color: black;
+}
+
+ol.bold-number li::marker {
+    font-weight: bold;
+}
+
+ol.non-bold-number li::marker {
+    font-weight: normal;
+}
+
+ol.lower-alpha {
+    list-style: lower-alpha;
+}
+
+.prose {
+    color: black;
+    /* background:  */
+}
+
+.prose p, .prose ol, .prose li, .prose table {
+    margin-top: 0.25rem;
+    margin-bottom: 0.25rem;
+}
+
+.prose ol {
+    padding-left: 0;
+}
+
+.prose p {
+    text-align: justify;
+}
+
+.prose {
+    max-width: 90%;
+}
+
+.uncut {
+    page-break-after: always;
+    page-break-inside: avoid;
+}
+
+.uncut-inside {
+    page-break-after: avoid;
+    page-break-inside: avoid;
+}

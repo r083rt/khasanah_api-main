@@ -1,0 +1,136 @@
+<?php
+
+namespace App\Models\Inventory;
+
+use App\Models\Branch;
+use App\Models\ProductIngredient;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use App\Traits\ColumnFilterer;
+use App\Traits\ColumnSorter;
+use Illuminate\Support\Facades\Auth;
+
+class ProductIngredientStockLog extends Model
+{
+    use HasFactory;
+    use ColumnFilterer;
+    use ColumnSorter;
+
+    public $timestamps = false;
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'product_ingredient_id',
+        'branch_id',
+        'stock',
+        'stock_old',
+        'stock_after',
+        'from',
+        'table_reference',
+        'table_id',
+        'created_by',
+        'product_recipe_unit_id',
+        'created_at',
+        'updated_at',
+    ];
+
+    /**
+     * The "booted" method of the model.
+     *
+     * @return void
+     */
+    protected static function booted()
+    {
+        static::creating(function ($data) {
+            if (Auth::id()) {
+                $data->created_by = Auth::id();
+            }
+
+            $data->stock_after = $data->stock + $data->stock_old;
+        });
+
+        static::created(function ($data) {
+            //
+        });
+    }
+
+    /**
+     * The attributes that should be cast to native types.
+     *
+     * @var array
+     */
+    protected $casts = [
+        //
+    ];
+
+    /**
+     * The accessors to append to the model's array form.
+     *
+     * @var array
+     */
+    protected $appends = [
+        'created_at_indo',
+        'stock_after',
+    ];
+
+    /**
+     * Get the stock after attribute.
+     *
+     * @return integer
+     */
+    public function getStockAfterAttribute()
+    {
+        return $this->stock + $this->stock_old;
+    }
+
+    /**
+     * Get the create at indo attribute.
+     *
+     * @return integer
+     */
+    public function getCreatedAtIndoAttribute()
+    {
+        if ($this->created_at) {
+            return tanggal_indo($this->created_at->format('Y-m-d'), true);
+        }
+
+        return null;
+    }
+
+    /**
+     * Get the created_by for the order.
+     */
+    public function createdBy()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Get the product ingredient for the user.
+     */
+    public function productIngredient()
+    {
+        return $this->belongsTo(ProductIngredient::class);
+    }
+
+    /**
+     * Get the units for the product ingredient.
+     */
+    public function productIngredientUnit()
+    {
+        return $this->belongsTo(ProductRecipeUnit::class, 'product_recipe_unit_id');
+    }
+
+    /**
+     * Get the branch for the user.
+     */
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
+    }
+}

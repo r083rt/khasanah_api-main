@@ -1,0 +1,66 @@
+<?php
+
+namespace App\Models\Distribution;
+
+use App\Models\Distribution\PoOrderProduct;
+use App\Models\Inventory\ProductRecipeUnit;
+use App\Models\Product;
+use App\Models\ProductIngredient;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use App\Traits\ColumnFilterer;
+use App\Traits\ColumnSorter;
+use Illuminate\Support\Facades\Auth;
+
+class PoManualNote extends Model
+{
+    use HasFactory;
+    use ColumnFilterer;
+    use ColumnSorter;
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'po_manual_id',
+        'product_ingredient_id',
+        'product_id',
+        'note'
+    ];
+
+    /**
+     * The attributes that should be cast to native types.
+     *
+     * @var array
+     */
+    protected $casts = [
+        //
+    ];
+
+    /**
+     * The accessors to append to the model's array form.
+     *
+     * @var array
+     */
+    protected $appends = [
+        //
+    ];
+
+   /**
+     * Get the ingredient for the po order ingredient detail.
+     */
+    public function ingredient()
+    {
+        return $this->belongsTo(ProductIngredient::class, 'product_ingredient_id');
+    }
+
+    /**
+     * Get the product for the po manual detail.
+     */
+    public function product()
+    {
+        return $this->belongsTo(Product::class, 'product_id');
+    }
+}
