@@ -136,7 +136,7 @@ class ForecastController extends Controller
         return $this->response($data);
     }
 
-     /**
+    /**
      * Display the specified resource.
      *
      * @param  int  $id
@@ -207,6 +207,23 @@ class ForecastController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
+    // public function import(Request $request)
+    // {
+    //     $data = $this->validate($request, [
+    //         'month' => 'required|min:1|max:12',
+    //         'file' => 'required|mimes:xlsx,xls|max:10000'
+    //     ]);
+
+    //     try {
+    //         ForecastImport::whereNotNull('id')->delete();
+    //         Excel::import(new ImportsForecastImport($data['month']), $request->file);
+
+    //         return $this->response('Silahkan Preview data sebelum submit');
+    //     } catch (\Throwable $th) {
+    //         return $this->response('Terjadi kesalahan. Silahkan import kembali dan pastikan file sesuai format', 422);
+    //     }
+    // }
+
     public function import(Request $request)
     {
         $data = $this->validate($request, [
@@ -215,12 +232,29 @@ class ForecastController extends Controller
         ]);
 
         try {
-            ForecastImport::whereNotNull('id')->delete();
-            Excel::import(new ImportsForecastImport($data['month']), $request->file);
+            if (!$request->hasFile('file')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'File tidak ditemukan'
+                ], 400);
+            }
 
-            return $this->response('Silahkan Preview data sebelum submit');
+            ForecastImport::whereNotNull('id')->delete();
+
+            Excel::import(
+                new ImportsForecastImport($data['month']),
+                $request->file('file')
+            );
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Silahkan Preview data sebelum submit'
+            ]);
         } catch (\Throwable $th) {
-            return $this->response('Terjadi kesalahan. Silahkan import kembali dan pastikan file sesuai format', 422);
+            return response()->json([
+                'status' => 'error',
+                'message' => $th->getMessage(),
+            ], 500);
         }
     }
 

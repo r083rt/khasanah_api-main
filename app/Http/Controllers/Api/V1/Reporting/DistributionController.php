@@ -13,6 +13,8 @@ use App\Services\Reporting\DistributionService;
 use App\Services\Reporting\SaleService;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
+use Maatwebsite\Excel\Excel as ExcelWriter;
+use Illuminate\Support\Facades\Log;
 
 class DistributionController extends Controller
 {
