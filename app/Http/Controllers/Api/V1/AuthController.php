@@ -91,6 +91,7 @@ class AuthController extends Controller
      */
     public function me()
     {
+
         return $this->response(User::with(['branch:id,name,code,address', 'role:id,name'])->find(auth()->id()));
     }
 

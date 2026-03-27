@@ -56,7 +56,8 @@ class CekForecastGenerate extends Command
                 $job2 = DB::table('jobs')->where('queue', 'forecast_conversion_2')->count();
                 $failedJob = DB::table('failed_jobs')->where('queue', 'forecast_conversion')->count();
                 $failedJob2 = DB::table('failed_jobs')->where('queue', 'forecast_conversion_2')->count();
-                if ($job == 0 && $failedJob == 0 && $job2 == 0 && $failedJob2 == 0) {
+                // if ($job == 0 && $failedJob == 0 && $job2 == 0 && $failedJob2 == 0) {
+                if ($job == 0 && $job2 == 0) {
                     $forecastConversionIds = $datas->pluck('id');
 
                     ForecastConversion::where('status_generate', 'running')->update([
@@ -115,8 +116,6 @@ class CekForecastGenerate extends Command
             } else {
                 $this->info('Successfully None');
             }
-
-
         } catch (\Throwable $th) {
             Log::error($this->description . ': ' . $th->getMessage());
             $this->error('Error: ' . $th->getMessage());

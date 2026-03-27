@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Imports\ForecastImport as ImportsForecastImport;
 use App\Jobs\Purchasing\ForecastConversion;
+use App\Jobs\Purchasing\ProcessForecastSubmit;
 use App\Models\Branch;
 use App\Models\Product;
 use App\Models\ProductRecipe;
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Support\Facades\Log;
 
 class ForecastController extends Controller
 {
@@ -226,6 +228,10 @@ class ForecastController extends Controller
 
     public function import(Request $request)
     {
+        app('log')->info('IMPORT DEBUG', [
+            'all' => $request->all(),
+        ]);
+
         $data = $this->validate($request, [
             'month' => 'required|min:1|max:12',
             'file' => 'required|mimes:xlsx,xls|max:10000'
@@ -304,84 +310,96 @@ class ForecastController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
+    // public function importSubmit(Request $request)
+    // {
+    //     $cek = PurchasingForecastConversion::select('id')->where('status_generate', 'running')->first();
+    //     if ($cek) {
+    //         return $this->response('Ada data masih dalam proses generate ulang. Kembali beberapa saat lagi', 422);
+    //     }
+
+    //     $year = date('Y');
+    //     $month = $request->month;
+    //     $additional = $request->additional;
+
+    //     $branchIds = ForecastImport::pluck('branch_id')->unique();
+    //     Forecast::where([
+    //         'month' => $month,
+    //         'year' => $year,
+    //     ])->delete();
+
+    //     PurchasingForecastConversion::where([
+    //         'month' => $month,
+    //         'year' => $year,
+    //         'status' => 'new',
+    //     ])->delete();
+
+    //     $branches = [];
+    //     foreach ($branchIds as $row) {
+    //         $forecastConversion = PurchasingForecastConversion::create([
+    //             'month' => $month,
+    //             'year' => $year,
+    //             'branch_id' => $row,
+    //             'status_generate' => 'running',
+    //             'additional' => $additional
+    //         ]);
+
+    //         $branches[$row] = $forecastConversion->id;
+    //     }
+
+    //     // $trendInflasi = Trend::where('month', $month)->where('year', $year)->first();
+    //     // $trend = $trendInflasi?->trend;
+    //     // $inflasi = $trendInflasi?->inflation;
+
+    //     $datas = ForecastImport::where('is_valid', 1)->get();
+    //     $ProductRecipes = ProductRecipe::select('master_packaging_id', 'product_id', 'product_ingredient_id', 'product_recipe_unit_id', 'measure')->whereIn('product_id', $datas->pluck('product_id')->unique())->get();
+    //     foreach ($datas as $value) {
+    //         if (isset($branches[$value->branch_id])) {
+    //             // $trendTotal = $trend ? round($trend / 100 * $value->total) : 0;
+    //             // $inflasiTotal = $inflasi ? round($inflasi / 100 * $value->total) : 0;
+    //             // $sale = $value->total + $trendTotal + $inflasiTotal;
+    //             $sale = $value->total;
+
+    //             $data = [
+    //                 'branch_id' => $value->branch_id,
+    //                 'product_id' => $value->product_id,
+    //                 'month' => $value->month,
+    //                 'year' => $year,
+    //                 'sale' => $sale,
+    //                 'real_sale' => $value->total,
+    //                 // 'trend' => $trendTotal,
+    //                 // 'inflation' => $inflasiTotal,
+    //             ];
+
+    //             Forecast::create($data);
+    //             $data['forecast_conversion_id'] = $branches[$value->branch_id];
+
+    //             $recipes = $ProductRecipes->where('product_id', $value->product_id);
+    //             $data['recipes'] = $recipes;
+
+    //             dispatch(new ForecastConversion($data));
+    //         }
+    //     }
+
+    //     ForecastImport::whereNotNull('id')->delete();
+
+    //     $key = 'fc_show_' . $month;
+    //     Cache::forget($key);
+
+    //     $key = 'fc_show_detail_' . $month;
+    //     Cache::forget($key);
+
+    //     return $this->response('Berhasil disubmit');
+    // }
     public function importSubmit(Request $request)
     {
-        $cek = PurchasingForecastConversion::select('id')->where('status_generate', 'running')->first();
-        if ($cek) {
-            return $this->response('Ada data masih dalam proses generate ulang. Kembali beberapa saat lagi', 422);
-        }
+        dispatch(new ProcessForecastSubmit(
+            $request->month,
+            $request->additional
+        ));
 
-        $year = date('Y');
-        $month = $request->month;
-        $additional = $request->additional;
-
-        $branchIds = ForecastImport::pluck('branch_id')->unique();
-        Forecast::where([
-            'month' => $month,
-            'year' => $year,
-        ])->delete();
-
-        PurchasingForecastConversion::where([
-            'month' => $month,
-            'year' => $year,
-            'status' => 'new',
-        ])->delete();
-
-        $branches = [];
-        foreach ($branchIds as $row) {
-            $forecastConversion = PurchasingForecastConversion::create([
-                'month' => $month,
-                'year' => $year,
-                'branch_id' => $row,
-                'status_generate' => 'running',
-                'additional' => $additional
-            ]);
-
-            $branches[$row] = $forecastConversion->id;
-        }
-
-        // $trendInflasi = Trend::where('month', $month)->where('year', $year)->first();
-        // $trend = $trendInflasi?->trend;
-        // $inflasi = $trendInflasi?->inflation;
-
-        $datas = ForecastImport::where('is_valid', 1)->get();
-        $ProductRecipes = ProductRecipe::select('master_packaging_id', 'product_id', 'product_ingredient_id', 'product_recipe_unit_id', 'measure')->whereIn('product_id', $datas->pluck('product_id')->unique())->get();
-        foreach ($datas as $value) {
-            if (isset($branches[$value->branch_id])) {
-                // $trendTotal = $trend ? round($trend / 100 * $value->total) : 0;
-                // $inflasiTotal = $inflasi ? round($inflasi / 100 * $value->total) : 0;
-                // $sale = $value->total + $trendTotal + $inflasiTotal;
-                $sale = $value->total;
-
-                $data = [
-                    'branch_id' => $value->branch_id,
-                    'product_id' => $value->product_id,
-                    'month' => $value->month,
-                    'year' => $year,
-                    'sale' => $sale,
-                    'real_sale' => $value->total,
-                    // 'trend' => $trendTotal,
-                    // 'inflation' => $inflasiTotal,
-                ];
-
-                Forecast::create($data);
-                $data['forecast_conversion_id'] = $branches[$value->branch_id];
-
-                $recipes = $ProductRecipes->where('product_id', $value->product_id);
-                $data['recipes'] = $recipes;
-
-                dispatch(new ForecastConversion($data));
-            }
-        }
-
-        ForecastImport::whereNotNull('id')->delete();
-
-        $key = 'fc_show_' . $month;
-        Cache::forget($key);
-
-        $key = 'fc_show_detail_' . $month;
-        Cache::forget($key);
-
-        return $this->response('Berhasil disubmit');
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data sedang diproses di background'
+        ]);
     }
 }
